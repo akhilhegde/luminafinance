@@ -1,0 +1,28 @@
+{
+  "name": "Lumina Finance",
+  "short_name": "Lumina",
+  "description": "Your Smart Finance Tracker",
+  "theme_color": "#0a1628",
+  "background_color": "#0a1628",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
