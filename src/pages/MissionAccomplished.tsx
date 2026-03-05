@@ -31,11 +31,11 @@ const MissionAccomplished = () => {
     };
 
     return (
-        <div className="relative z-10 max-w-md mx-auto min-h-screen flex flex-col items-center justify-center px-6">
+        <div className="relative z-10 max-w-md mx-auto min-h-screen flex flex-col items-center justify-center px-6 pb-28">
             {/* Radial glow background */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="w-96 h-96 rounded-full" style={{
-                    background: "radial-gradient(circle, hsla(195, 100%, 50%, 0.15) 0%, transparent 70%)",
+                    background: "radial-gradient(circle, hsla(224, 90%, 55%, 0.15) 0%, transparent 70%)",
                 }} />
             </div>
 
@@ -43,17 +43,17 @@ const MissionAccomplished = () => {
             <div className="relative mb-8">
                 <div className="absolute inset-0 w-40 h-40 rounded-full animate-flame-pulse" style={{
                     margin: "-20px",
-                    background: "radial-gradient(circle, hsla(195, 100%, 50%, 0.2) 0%, transparent 70%)",
+                    background: "radial-gradient(circle, hsla(224, 90%, 55%, 0.2) 0%, transparent 70%)",
                 }} />
                 <div className="w-28 h-28 flex items-center justify-center relative">
                     <span
                         className="material-icons animate-flame-pulse"
                         style={{
                             fontSize: "96px",
-                            background: "linear-gradient(180deg, #00E5FF 0%, #2979FF 100%)",
+                            background: "linear-gradient(180deg, hsl(224, 90%, 65%) 0%, hsl(224, 90%, 45%) 100%)",
                             WebkitBackgroundClip: "text",
                             WebkitTextFillColor: "transparent",
-                            filter: "drop-shadow(0 0 20px hsla(195, 100%, 50%, 0.6))",
+                            filter: "drop-shadow(0 0 20px hsla(224, 90%, 55%, 0.6))",
                         }}
                     >
                         local_fire_department
@@ -65,25 +65,24 @@ const MissionAccomplished = () => {
             <h1 className="text-3xl font-extrabold text-foreground text-center">
                 Mission Accomplished!
             </h1>
-            <p className="text-lg font-semibold mt-2" style={{ color: "#00E5FF" }}>
+            <p className="text-lg font-semibold mt-2 text-primary">
                 {streak}-Day Streak Maintained!
             </p>
 
             {/* XP Badge Card */}
             <div className="glass-card rounded-2xl p-5 mt-8 w-full max-w-xs text-center" style={{
-                border: "1px solid hsla(195, 100%, 50%, 0.2)",
-                boxShadow: "0 0 20px hsla(195, 100%, 50%, 0.1)",
+                border: "1px solid hsla(224, 90%, 55%, 0.2)",
+                boxShadow: "0 0 20px hsla(224, 90%, 55%, 0.1)",
             }}>
                 <div className="flex items-center justify-center gap-3 mb-2">
                     <span className="material-icons text-yellow-400 text-xl">star</span>
                     <p className="text-foreground font-bold text-lg">Daily Mission Complete</p>
                 </div>
                 <span
-                    className="inline-block px-4 py-1.5 rounded-full text-sm font-bold animate-xp-pop"
+                    className="inline-block px-4 py-1.5 rounded-full text-sm font-bold animate-xp-pop text-primary"
                     style={{
-                        color: "#00E5FF",
-                        border: "1px solid hsla(195, 100%, 50%, 0.3)",
-                        background: "hsla(195, 100%, 50%, 0.1)",
+                        border: "1px solid hsla(224, 90%, 55%, 0.3)",
+                        background: "hsla(224, 90%, 55%, 0.1)",
                     }}
                 >
                     +50 XP
@@ -91,14 +90,10 @@ const MissionAccomplished = () => {
             </div>
 
             {/* Buttons */}
-            <div className="w-full max-w-xs mt-auto mb-12 space-y-3 pt-12">
+            <div className="w-full max-w-xs mt-auto mb-4 space-y-3 pt-12">
                 <Button
                     onClick={handleShare}
-                    className="w-full h-14 text-lg font-bold rounded-2xl"
-                    style={{
-                        background: "linear-gradient(135deg, #00E5FF 0%, #00BCD4 100%)",
-                        color: "#0a0f1e",
-                    }}
+                    className="w-full h-14 text-lg font-bold rounded-2xl shadow-neon"
                 >
                     <span className="material-icons mr-2 text-lg">share</span>
                     Share

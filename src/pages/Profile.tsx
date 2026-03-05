@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -6,9 +6,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import TrophyRoom from "@/components/TrophyRoom";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,11 +45,18 @@ const Profile = () => {
   const { user, signOut } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [displayName, setDisplayName] = useState("");
   const [dailyBudget, setDailyBudget] = useState("");
-  const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const { isSupported, isEnabled, loading: pushLoading, toggle: togglePush } = usePushNotifications();
+
+  // Settings sheet state
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsName, setSettingsName] = useState("");
+  const [settingsBio, setSettingsBio] = useState("");
+  const [settingsAvatar, setSettingsAvatar] = useState<string | null>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Detect if app is installed as PWA
   const [isInstalled, setIsInstalled] = useState(false);
@@ -64,30 +79,116 @@ const Profile = () => {
 
   useEffect(() => {
     if (profile) {
-      setDisplayName(profile.display_name || "");
       setDailyBudget(String(profile.daily_budget));
     }
   }, [profile]);
 
-  const handleSave = async () => {
+  // Populate settings sheet fields when opened
+  useEffect(() => {
+    if (settingsOpen && profile) {
+      setSettingsName(profile.display_name || "");
+      setSettingsBio((profile as any).bio || "");
+      setSettingsAvatar((profile as any).avatar_url || null);
+    }
+  }, [settingsOpen, profile]);
+
+  const handleSaveBudget = async () => {
     if (!user) return;
-    setSaving(true);
     const { error } = await supabase
       .from("profiles")
       .upsert(
         {
           user_id: user.id,
-          display_name: displayName,
           daily_budget: parseFloat(dailyBudget) || 2000,
         },
         { onConflict: "user_id" }
       );
     if (error) toast.error("Failed to save");
     else {
-      toast.success("Profile updated!");
+      toast.success("Budget updated!");
       queryClient.invalidateQueries({ queryKey: ["profile"] });
     }
-    setSaving(false);
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user) return;
+    setUploadingAvatar(true);
+    try {
+      // Try to delete from storage
+      const { error } = await supabase.storage
+        .from("avatars")
+        .remove([`${user.id}/avatar.jpg`, `${user.id}/avatar.png`, `${user.id}/avatar.jpeg`, `${user.id}/avatar.webp`]);
+
+      // Clear avatar_url in profile
+      await supabase
+        .from("profiles")
+        .update({ avatar_url: null } as any)
+        .eq("user_id", user.id);
+
+      setSettingsAvatar(null);
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      toast.success("Profile photo removed");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to remove avatar");
+    }
+    setUploadingAvatar(false);
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!user) return;
+    setUploadingAvatar(true);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const filePath = `${user.id}/avatar.${fileExt}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get the public URL
+      const { data: urlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      // Add cache-busting timestamp
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      setSettingsAvatar(publicUrl);
+      toast.success("Avatar uploaded!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload avatar");
+    }
+    setUploadingAvatar(false);
+  };
+
+  const handleSaveSettings = async () => {
+    if (!user) return;
+    setSavingSettings(true);
+    try {
+      const updateData: any = {
+        user_id: user.id,
+        display_name: settingsName,
+        bio: settingsBio,
+      };
+      if (settingsAvatar) {
+        updateData.avatar_url = settingsAvatar;
+      }
+
+      const { error } = await supabase
+        .from("profiles")
+        .upsert(updateData, { onConflict: "user_id" });
+
+      if (error) throw error;
+
+      toast.success("Profile updated!");
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      setSettingsOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save settings");
+    }
+    setSavingSettings(false);
   };
 
   const handleClearData = async () => {
@@ -116,26 +217,38 @@ const Profile = () => {
   const levelRange = currentLevel.max === Infinity ? 5000 : currentLevel.max - currentLevel.min;
   const xpProgress = Math.min((xpInLevel / levelRange) * 100, 100);
 
+  const avatarUrl = (profile as any)?.avatar_url;
+  const bio = (profile as any)?.bio;
+
   return (
     <div className="relative z-10 max-w-md mx-auto min-h-screen flex flex-col pb-24">
       <header className="pt-12 px-6 flex items-center justify-between">
         <button onClick={() => navigate(-1)} className="p-1">
           <span className="material-icons text-foreground">arrow_back</span>
         </button>
-        <button onClick={() => { }} className="p-1">
+        <button onClick={() => setSettingsOpen(true)} className="p-1">
           <span className="material-icons text-muted-foreground">settings</span>
         </button>
       </header>
 
       {/* Avatar */}
       <div className="flex justify-center mt-6">
-        <div className="w-24 h-24 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center shadow-neon">
-          <span className="material-icons text-primary text-4xl">person</span>
+        <div className="w-24 h-24 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center shadow-neon overflow-hidden">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+          ) : (
+            <span className="material-icons text-primary text-4xl">person</span>
+          )}
         </div>
       </div>
       <p className="text-center text-foreground font-bold text-lg mt-3">
         {profile?.display_name || user?.email?.split("@")[0]}
       </p>
+
+      {/* Bio */}
+      {bio && (
+        <p className="text-center text-muted-foreground text-sm mt-1 px-8 line-clamp-2">{bio}</p>
+      )}
 
       {/* Level Badge */}
       <p className="text-center text-muted-foreground text-sm mt-1">{currentLevel.name}</p>
@@ -191,17 +304,9 @@ const Profile = () => {
         />
       </div>
 
-      {/* Settings */}
+      {/* Quick Settings */}
       <div className="px-6 mt-8 space-y-5">
         <div className="glass-card rounded-xl p-5 space-y-4">
-          <div>
-            <Label className="text-muted-foreground text-sm">Display Name</Label>
-            <Input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              className="mt-1 bg-secondary/50 border-border text-foreground"
-            />
-          </div>
           <div>
             <Label className="text-muted-foreground text-sm">Daily Budget (₹)</Label>
             <Input
@@ -211,12 +316,12 @@ const Profile = () => {
               className="mt-1 bg-secondary/50 border-border text-foreground"
             />
           </div>
-          <Button onClick={handleSave} disabled={saving} className="w-full shadow-neon font-bold">
-            {saving ? "Saving..." : "Save Changes"}
+          <Button onClick={handleSaveBudget} className="w-full shadow-neon font-bold">
+            Save Budget
           </Button>
         </div>
 
-        {/* Install App Banner - shown only on iOS when not installed */}
+        {/* Install App Banner - shown only when not installed */}
         {!isInstalled && (
           <div className="glass-card rounded-xl p-5 space-y-2 border border-primary/20">
             <div className="flex items-center gap-3">
@@ -241,34 +346,126 @@ const Profile = () => {
           </div>
         )}
 
-        <Button variant="outline" onClick={signOut} className="w-full border-destructive/30 text-destructive hover:bg-destructive/10">
-          <span className="material-icons text-sm mr-2">logout</span>
-          Sign Out
-        </Button>
-
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive" className="w-full" disabled={clearing}>
-              <span className="material-icons text-sm mr-2">delete_forever</span>
-              {clearing ? "Clearing..." : "Clear My Data"}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete all your uploaded statements, transactions, and categorization rules. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleClearData} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Yes, Clear Everything
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
+
+      {/* Settings Sheet */}
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent side="bottom" className="bg-background border-t border-border rounded-t-2xl max-h-[85vh] overflow-y-auto">
+          <SheetHeader className="mb-6">
+            <SheetTitle className="text-foreground">Profile Settings</SheetTitle>
+            <SheetDescription>Update your profile information</SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-6 px-1">
+            {/* Avatar Upload */}
+            <div className="flex flex-col items-center gap-3">
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="relative w-24 h-24 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center overflow-hidden group transition-all hover:border-primary/60"
+              >
+                {settingsAvatar ? (
+                  <img src={settingsAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="material-icons text-primary text-4xl">person</span>
+                )}
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="material-icons text-white text-2xl">
+                    {uploadingAvatar ? "hourglass_empty" : "camera_alt"}
+                  </span>
+                </div>
+              </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleAvatarUpload(file);
+                }}
+              />
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-muted-foreground">Tap to change avatar</p>
+                {settingsAvatar && (
+                  <button
+                    onClick={handleRemoveAvatar}
+                    disabled={uploadingAvatar}
+                    className="text-xs text-destructive hover:text-destructive/80 transition-colors"
+                  >
+                    Remove photo
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Display Name */}
+            <div>
+              <Label className="text-muted-foreground text-sm">Display Name</Label>
+              <Input
+                value={settingsName}
+                onChange={(e) => setSettingsName(e.target.value)}
+                placeholder="Enter your name"
+                className="mt-1 bg-secondary/50 border-border text-foreground"
+              />
+            </div>
+
+            {/* Bio */}
+            <div>
+              <Label className="text-muted-foreground text-sm">Bio</Label>
+              <Textarea
+                value={settingsBio}
+                onChange={(e) => setSettingsBio(e.target.value)}
+                placeholder="Tell us about yourself..."
+                rows={3}
+                maxLength={200}
+                className="mt-1 bg-secondary/50 border-border text-foreground resize-none"
+              />
+              <p className="text-xs text-muted-foreground text-right mt-1">{settingsBio.length}/200</p>
+            </div>
+
+            {/* Save Button */}
+            <Button
+              onClick={handleSaveSettings}
+              disabled={savingSettings}
+              className="w-full h-12 font-bold shadow-neon rounded-xl"
+            >
+              {savingSettings ? "Saving..." : "Save Changes"}
+            </Button>
+
+            {/* Divider */}
+            <div className="border-t border-border/30 pt-4 mt-2 space-y-3">
+              <Button variant="outline" onClick={signOut} className="w-full border-destructive/30 text-destructive hover:bg-destructive/10">
+                <span className="material-icons text-sm mr-2">logout</span>
+                Sign Out
+              </Button>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="w-full" disabled={clearing}>
+                    <span className="material-icons text-sm mr-2">delete_forever</span>
+                    {clearing ? "Clearing..." : "Clear My Data"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete all your uploaded statements, transactions, and categorization rules. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearData} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Yes, Clear Everything
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
